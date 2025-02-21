@@ -6,6 +6,7 @@ import { jsPDF } from 'jspdf';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faTrash, faEdit } from '@fortawesome/free-solid-svg-icons';
 import ConfirmationDialog from './ConfirmationDialog';
+import PasswordDialog from './PasswordDialog';
 
 function App() {
   const [products, setProducts] = useState([]);
@@ -13,10 +14,23 @@ function App() {
   const [currentPage, setCurrentPage] = useState(1);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [confirmCallback, setConfirmCallback] = useState(null);
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [passwordCallback, setPasswordCallback] = useState(null);
   const itemsPerPage = 8;
 
   useEffect(() => {
     loadProducts();
+    const subscription = supabase
+      .from('products')
+      .on('*', payload => {
+        console.log('Change received!', payload);
+        loadProducts();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeSubscription(subscription);
+    };
   }, [currentPage]);
 
   const loadProducts = useCallback(async () => {
@@ -54,7 +68,17 @@ function App() {
         </button>
         <button
           className="bg-blue-600 text-white px-4 py-2 rounded mt-2 ml-2"
-          onClick={() => editProduct(product)}
+          onClick={() => {
+            setShowPasswordDialog(true);
+            setPasswordCallback(() => (password) => {
+              if (password === 'admin') {
+                editProduct(product);
+              } else {
+                alert('Incorrect password');
+              }
+              setShowPasswordDialog(false);
+            });
+          }}
         >
           <FontAwesomeIcon icon={faEdit} /> Edit
         </button>
@@ -177,12 +201,6 @@ function App() {
   }, [cart]);
 
   const editProduct = useCallback((product) => {
-    const password = prompt('Enter admin password:', '');
-    if (password !== 'admin') {
-      alert('Incorrect password');
-      return;
-    }
-
     const newName = prompt('Enter new product name:', product.product_name);
     const newPrice = parseFloat(prompt('Enter new product price:', product.price));
     const newInventory = parseInt(prompt('Enter new product inventory:', product.inventory));
@@ -311,6 +329,12 @@ function App() {
           message="Do you want to edit the image?"
           onConfirm={confirmCallback}
           onCancel={() => setShowConfirmDialog(false)}
+        />
+      )}
+      {showPasswordDialog && (
+        <PasswordDialog
+          onConfirm={passwordCallback}
+          onCancel={() => setShowPasswordDialog(false)}
         />
       )}
     </div>
