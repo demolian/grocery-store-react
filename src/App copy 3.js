@@ -11,6 +11,7 @@ function App() {
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [confirmCallback, setConfirmCallback] = useState(null);
   const itemsPerPage = 8;
@@ -52,15 +53,17 @@ function App() {
         >
           Add to Cart
         </button>
-        <button
-          className="bg-blue-600 text-white px-4 py-2 rounded mt-2 ml-2"
-          onClick={() => editProduct(product)}
-        >
-          <FontAwesomeIcon icon={faEdit} /> Edit
-        </button>
+        {isAdmin && (
+          <button
+            className="bg-blue-600 text-white px-4 py-2 rounded mt-2 ml-2"
+            onClick={() => editProduct(product)}
+          >
+            <FontAwesomeIcon icon={faEdit} /> Edit
+          </button>
+        )}
       </div>
     ));
-  }, [products, currentPage]);
+  }, [products, currentPage, isAdmin]);
 
   const addToCart = useCallback((product) => {
     if (product.inventory <= 0) {
@@ -177,7 +180,7 @@ function App() {
   }, [cart]);
 
   const editProduct = useCallback((product) => {
-    const password = prompt('Enter admin password:', '');
+    const password = prompt('Enter admin password:');
     if (password !== 'admin') {
       alert('Incorrect password');
       return;
@@ -222,6 +225,15 @@ function App() {
     });
   }, [loadProducts]);
 
+  const handleLogin = () => {
+    const password = prompt('Enter admin password:');
+    if (password === 'admin') {
+      setIsAdmin(true);
+    } else {
+      alert('Incorrect password');
+    }
+  };
+
   return (
     <div className="container mx-auto p-4">
       <header className="bg-green-600 text-white p-4">
@@ -234,6 +246,9 @@ function App() {
             className="border border-gray-400 p-2 rounded text-black mx-auto"
             onInput={handleSearch}
           />
+          <button className="bg-blue-600 text-white px-4 py-2 rounded ml-2" onClick={handleLogin}>
+            Admin Login
+          </button>
         </div>
       </header>
       <main>
