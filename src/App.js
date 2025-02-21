@@ -21,15 +21,15 @@ function App() {
   useEffect(() => {
     loadProducts();
     const subscription = supabase
-      .from('products')
-      .on('*', payload => {
+      .channel('public:products')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, payload => {
         console.log('Change received!', payload);
         loadProducts();
       })
       .subscribe();
 
     return () => {
-      supabase.removeSubscription(subscription);
+      supabase.removeChannel(subscription);
     };
   }, [currentPage]);
 
