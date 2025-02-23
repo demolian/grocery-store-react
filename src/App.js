@@ -139,7 +139,22 @@ function App() {
       <tr key={item.product}>
         <td className="p-2">{item.product}</td>
         <td className="p-2">₹{item.price.toFixed(2)}</td>
-        <td className="p-2">{item.quantity}</td>
+        <td className="p-2 flex items-center">
+          <button
+            className="bg-gray-300 text-black px-2 py-1 rounded"
+            onClick={() => updateCartItemQuantity(item.product, item.quantity - 1)}
+            disabled={item.quantity <= 1}
+          >
+            -
+          </button>
+          <span className="mx-2">{item.quantity}</span>
+          <button
+            className="bg-gray-300 text-black px-2 py-1 rounded"
+            onClick={() => updateCartItemQuantity(item.product, item.quantity + 1)}
+          >
+            +
+          </button>
+        </td>
         <td className="p-2">₹{(item.price * item.quantity).toFixed(2)}</td>
         <td className="p-2">
           <button className="text-red-600" onClick={() => removeFromCart(item.product)}>
@@ -149,6 +164,22 @@ function App() {
       </tr>
     ));
   }, [cart]);
+
+  const updateCartItemQuantity = useCallback((productName, newQuantity) => {
+    setCart(prevCart => {
+      return prevCart.map(item =>
+        item.product === productName
+          ? { ...item, quantity: newQuantity }
+          : item
+      );
+    });
+
+    const product = products.find(p => p.product_name === productName);
+    if (product) {
+      const quantityChange = newQuantity - cart.find(item => item.product === productName).quantity;
+      updateProductInventory(product.id, -quantityChange);
+    }
+  }, [cart, products]);
 
   const removeFromCart = useCallback((productName) => {
     const product = cart.find(item => item.product === productName);
@@ -204,8 +235,32 @@ function App() {
     const newName = prompt('Enter new product name:', product.product_name);
     const newPrice = parseFloat(prompt('Enter new product price:', product.price));
     const newInventory = parseInt(prompt('Enter new product inventory:', product.inventory));
+
+    // Update the product with the new values before showing the confirmation dialog
+    const updateProductWithoutImage = async () => {
+      const { error: updateError } = await supabase
+        .from('products')
+        .update({ product_name: newName, price: newPrice, inventory: newInventory })
+        .match({ id: product.id });
+      if (updateError) {
+        console.error("Error updating product:", updateError);
+        alert('Failed to update product. Please try again.');
+        return;
+      }
+      loadProducts();
+    };
+
+    updateProductWithoutImage();
+
     setShowConfirmDialog(true);
-    setConfirmCallback(() => async () => {
+    setConfirmCallback(() => async (confirm) => {
+      if (!confirm) {
+        // If the user cancels the confirmation dialog, just close the dialog
+        setShowConfirmDialog(false);
+        return;
+      }
+
+      // Directly allow the user to upload an image from the file system
       let newImageUrl = product.image_url;
       const imageFile = document.createElement('input');
       imageFile.type = 'file';
@@ -222,21 +277,24 @@ function App() {
             return;
           }
           newImageUrl = `${process.env.REACT_APP_SUPABASE_URL}/storage/v1/object/public/images/${file.name}`;
+          updateProductWithImage();
         }
       };
       imageFile.click();
 
-      const { error: updateError } = await supabase
-        .from('products')
-        .update({ product_name: newName, price: newPrice, inventory: newInventory, image_url: newImageUrl })
-        .match({ id: product.id });
-      if (updateError) {
-        console.error("Error updating product:", updateError);
-        alert('Failed to update product. Please try again.');
-        return;
-      }
-      loadProducts();
-      setShowConfirmDialog(false);
+      const updateProductWithImage = async () => {
+        const { error: updateError } = await supabase
+          .from('products')
+          .update({ product_name: newName, price: newPrice, inventory: newInventory, image_url: newImageUrl })
+          .match({ id: product.id });
+        if (updateError) {
+          console.error("Error updating product:", updateError);
+          alert('Failed to update product. Please try again.');
+          return;
+        }
+        loadProducts();
+        setShowConfirmDialog(false);
+      };
     });
   }, [loadProducts]);
 

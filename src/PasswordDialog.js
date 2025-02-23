@@ -5,7 +5,11 @@ const PasswordDialog = ({ onConfirm, onCancel }) => {
   const [password, setPassword] = useState('');
 
   const handleConfirm = () => {
-    onConfirm(password);
+    if (password === 'admin') {
+      onConfirm(password);
+    } else {
+      alert('Incorrect password');
+    }
     setPassword('');
   };
 
@@ -20,8 +24,12 @@ const PasswordDialog = ({ onConfirm, onCancel }) => {
           className="border border-gray-400 p-2 rounded w-full"
         />
         <div className="flex justify-end mt-4">
-          <button className="bg-red-600 text-white px-4 py-2 rounded mr-2" onClick={onCancel}>Cancel</button>
-          <button className="bg-green-600 text-white px-4 py-2 rounded" onClick={handleConfirm}>Confirm</button>
+          <button className="bg-red-600 text-white px-4 py-2 rounded mr-2" onClick={onCancel}>
+            Cancel
+          </button>
+          <button className="bg-green-600 text-white px-4 py-2 rounded" onClick={handleConfirm}>
+            Confirm
+          </button>
         </div>
       </div>
     </div>
