@@ -1,12 +1,13 @@
 import React from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faTrash } from '@fortawesome/free-solid-svg-icons';
+import { faTrash, faPlus, faMinus } from '@fortawesome/free-solid-svg-icons';
 
 const weightOptions = [10, 25, 50, 100, 250, 500, 1000]; // values in grams
 
 const Cart = ({
   cart,
   updateCartItemWeight,
+  updateCartItemQuantity, // new prop for quantity adjustment
   removeFromCart,
   exportToExcel,
   exportToPDF,
@@ -20,14 +21,15 @@ const Cart = ({
             <th className="text-left p-2">Product</th>
             <th className="text-left p-2">Price per Kg</th>
             <th className="text-left p-2">Weight (g)</th>
+            <th className="text-left p-2">Quantity</th>
             <th className="text-left p-2">Total Price</th>
             <th className="text-left p-2">Actions</th>
           </tr>
         </thead>
         <tbody>
           {cart.map(item => {
-            // Total price = (price per kg) * (weight in kg)
-            const totalPrice = (item.price * item.weight) / 1000;
+            // Total price = (price per kg) * (weight in kg) * quantity
+            const totalPrice = (item.price * item.weight * item.quantity) / 1000;
             return (
               <tr key={item.product}>
                 <td className="p-2">{item.product}</td>
@@ -47,6 +49,28 @@ const Cart = ({
                     ))}
                   </select>
                 </td>
+                <td className="p-2 flex items-center">
+                  <button
+                    className="bg-gray-300 text-black px-2 py-1 rounded"
+                    onClick={() =>
+                      updateCartItemQuantity(
+                        item.product,
+                        Math.max(item.quantity - 1, 1)
+                      )
+                    }
+                  >
+                    <FontAwesomeIcon icon={faMinus} />
+                  </button>
+                  <span className="mx-2">{item.quantity}</span>
+                  <button
+                    className="bg-gray-300 text-black px-2 py-1 rounded"
+                    onClick={() =>
+                      updateCartItemQuantity(item.product, item.quantity + 1)
+                    }
+                  >
+                    <FontAwesomeIcon icon={faPlus} />
+                  </button>
+                </td>
                 <td className="p-2">₹{totalPrice.toFixed(2)}</td>
                 <td className="p-2">
                   <button
@@ -65,7 +89,11 @@ const Cart = ({
         <p className="text-xl font-bold">
           Total: ₹
           {cart
-            .reduce((total, item) => total + (item.price * item.weight) / 1000, 0)
+            .reduce(
+              (total, item) =>
+                total + (item.price * item.weight * item.quantity) / 1000,
+              0
+            )
             .toFixed(2)}
         </p>
         <div>

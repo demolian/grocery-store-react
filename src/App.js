@@ -77,11 +77,17 @@ function App() {
     }
 
     // Default weight chosen is 1000 grams.
-    const defaultWeight = 1000; 
+    const defaultWeight = 1000;
 
+    // Set default quantity to 1.
     setCart((prevCart) => [
       ...prevCart,
-      { product: product.product_name, price: product.price, weight: defaultWeight }
+      {
+        product: product.product_name,
+        price: product.price,
+        weight: defaultWeight,
+        quantity: 1
+      }
     ]);
 
     // Deduct from inventory: weight (in kg) = defaultWeight/1000
@@ -134,6 +140,16 @@ function App() {
     },
     [cart, products]
   );
+
+  const updateCartItemQuantity = useCallback((productName, newQuantity) => {
+    setCart((prevCart) =>
+      prevCart.map((item) =>
+        item.product.toLowerCase() === productName.toLowerCase()
+          ? { ...item, quantity: newQuantity }
+          : item
+      )
+    );
+  }, []);
 
   const removeFromCart = useCallback(
     (productName) => {
@@ -427,6 +443,7 @@ function App() {
           <Cart
             cart={cart}
             updateCartItemWeight={updateCartItemWeight}
+            updateCartItemQuantity={updateCartItemQuantity} // Add this line
             removeFromCart={removeFromCart}
             exportToExcel={exportToExcel}
             exportToPDF={exportToPDF}
