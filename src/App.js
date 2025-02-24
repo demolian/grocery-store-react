@@ -3,6 +3,7 @@ import supabase from './supabaseClient';
 import './index.css';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
 import ConfirmationDialog from './ConfirmationDialog';
 import PasswordDialog from './PasswordDialog';
 import ProductList from './components/ProductList';
@@ -60,12 +61,13 @@ function App() {
   }, [searchTerm]);
 
   const addToCart = useCallback((product) => {
-    // Prevent adding duplicate items.
+    // Prevent adding duplicate items (case insensitive check)
     const exists = cart.find(
-      (item) => item.product.toLowerCase() === product.product_name.toLowerCase()
+      (item) =>
+        item.product.toLowerCase() === product.product_name.toLowerCase()
     );
     if (exists) {
-      alert('Item already in cart. You can update its quantity from the cart.');
+      alert('Item already in cart. You can update its weight from the cart.');
       return;
     }
 
@@ -74,20 +76,16 @@ function App() {
       return;
     }
 
+    // Default weight chosen is 1000 grams.
+    const defaultWeight = 1000; 
+
     setCart((prevCart) => [
       ...prevCart,
-      { product: product.product_name, price: product.price, quantity: 1 }
+      { product: product.product_name, price: product.price, weight: defaultWeight }
     ]);
 
-    setProducts((prevProducts) =>
-      prevProducts.map((p) =>
-        p.id === product.id
-          ? { ...p, inventory: Math.max(p.inventory - 1, 0) }
-          : p
-      )
-    );
-
-    updateProductInventory(product.id, -1);
+    // Deduct from inventory: weight (in kg) = defaultWeight/1000
+    updateProductInventory(product.id, -(defaultWeight / 1000));
   }, [cart]);
 
   const updateProductInventory = useCallback(async (productId, change) => {
@@ -100,6 +98,7 @@ function App() {
       console.error('Error fetching product inventory:', fetchError);
       return;
     }
+    // Allow fractional inventory: newInventory = old inventory + change
     const newInventory = Math.max(product.inventory + change, 0);
     const { error } = await supabase
       .from('products')
@@ -110,24 +109,27 @@ function App() {
     }
   }, []);
 
-  const updateCartItemQuantity = useCallback(
-    (productName, newQuantity) => {
+  const updateCartItemWeight = useCallback(
+    (productName, newWeight) => {
       setCart((prevCart) => {
         return prevCart.map((item) =>
-          item.product === productName
-            ? { ...item, quantity: newQuantity }
+          item.product.toLowerCase() === productName.toLowerCase()
+            ? { ...item, weight: newWeight }
             : item
         );
       });
 
       const product = products.find(
-        (p) => p.product_name === productName
+        (p) => p.product_name.toLowerCase() === productName.toLowerCase()
       );
       if (product) {
-        const quantityChange =
-          newQuantity - cart.find((item) => item.product === productName)
-            .quantity;
-        updateProductInventory(product.id, -quantityChange);
+        // Find previous weight from cart.
+        const oldWeight = cart.find(
+          (item) => item.product.toLowerCase() === productName.toLowerCase()
+        ).weight;
+        const weightChange = newWeight - oldWeight;
+        // Adjust inventory by the weight change in kg.
+        updateProductInventory(product.id, -(weightChange / 1000));
       }
     },
     [cart, products]
@@ -148,42 +150,98 @@ function App() {
     [cart]
   );
 
+  // Helper function to get formatted date and time
+  const getFormattedDateTime = () => {
+    const now = new Date();
+    const day = now.getDate();
+    const month = now.toLocaleString('default', { month: 'short' });
+    const year = now.getFullYear();
+    const hours = now.getHours().toString().padStart(2, '0');
+    const minutes = now.getMinutes().toString().padStart(2, '0');
+    const seconds = now.getSeconds().toString().padStart(2, '0');
+    // Format: "24 Feb 2025_15t05m45s"
+    return `${day} ${month} ${year}_${hours}t${minutes}m${seconds}s`;
+  };
+
   const exportToExcel = useCallback(() => {
-    const ws = XLSX.utils.json_to_sheet(
-      cart.map((item) => ({
-        Product: item.product,
-        Price: item.price,
-        Quantity: item.quantity,
-        Total: item.price * item.quantity,
-      }))
+    // Prepare the rows from the cart data
+    const data = cart.map((item, index) => ({
+      "S.No.": index + 1,
+      Product: item.product,
+      "Price per Kg": item.price.toFixed(2),
+      "Weight (g)": item.weight,
+      "Total Price": ((item.price * item.weight) / 1000).toFixed(2),
+    }));
+
+    // Calculate total sales
+    const totalSales = cart.reduce(
+      (total, item) => total + (item.price * item.weight) / 1000,
+      0
     );
+    // Add a total row at the end. (Leave S.No. and other values blank except Product and Total Price)
+    data.push({
+      "S.No.": "",
+      Product: "Total",
+      "Price per Kg": "",
+      "Weight (g)": "",
+      "Total Price": "\u20B9" + totalSales.toFixed(2),
+    });
+
+    const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Cart');
-    XLSX.writeFile(wb, 'cart.xlsx');
+    XLSX.utils.book_append_sheet(wb, ws, "Cart");
+
+    const fileName = `${getFormattedDateTime()}_cart.xlsx`;
+    XLSX.writeFile(wb, fileName);
   }, [cart]);
 
   const exportToPDF = useCallback(() => {
     const doc = new jsPDF();
-    doc.text('Cart', 10, 10);
-    let y = 20;
-    cart.forEach((item) => {
-      doc.text(
-        `${item.product} - ₹${item.price.toFixed(2)} x ${item.quantity} = ₹${(
-          item.price * item.quantity
-        ).toFixed(2)}`,
-        10,
-        y
-      );
-      y += 10;
-    });
-    doc.text(
-      `Total: ₹${cart
-        .reduce((total, item) => total + item.price * item.quantity, 0)
-        .toFixed(2)}`,
-      10,
-      y + 10
+
+    // NOTE: For Marathi or other non-Latin languages you need to embed a custom font
+    // that supports those characters. For example, use Noto Sans Devanagari.
+    // Example (after adding the font via addFileToVFS and addFont):
+    // doc.addFileToVFS("NotoSansDevanagari-Regular.ttf", fontData);
+    // doc.addFont("NotoSansDevanagari-Regular.ttf", "NotoSansDevanagari", "normal");
+    // Then set:
+    // doc.setFont("NotoSansDevanagari");
+
+    // Here we'll use 'Times' as before but note it might not support Marathi.
+    doc.setFont("Times", "normal");
+    doc.setFontSize(12);
+
+    const exportData = cart.map((item, index) => ({
+      "S.No.": index + 1,
+      "Product": item.product,
+      "Price per Kg": item.price.toFixed(2),
+      "Weight (g)": item.weight,
+      "Total Price": ((item.price * item.weight) / 1000).toFixed(2),
+    }));
+
+    // Calculate total sales
+    const totalSales = cart.reduce(
+      (total, item) => total + (item.price * item.weight) / 1000,
+      0
     );
-    doc.save('cart.pdf');
+
+    // Use the keys from the first object as table headers
+    const columns = Object.keys(exportData[0]);
+    const rows = exportData.map((row) => columns.map((col) => row[col]));
+
+    // Create table using autoTable
+    doc.autoTable({
+      head: [columns],
+      body: rows,
+      styles: { font: 'Times', fontSize: 12 },
+      theme: 'grid',
+    });
+
+    // Write total sales below the table. The final Y coordinate is available in doc.lastAutoTable.finalY.
+    const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 10 : 20;
+    doc.text(`Total: \u20B9${totalSales.toFixed(2)}`, 10, finalY);
+
+    const fileName = `${getFormattedDateTime()}_cart.pdf`;
+    doc.save(fileName);
   }, [cart]);
 
   const checkout = useCallback(() => {
@@ -368,7 +426,7 @@ function App() {
           <h2 className="text-2xl font-bold mb-4">Cart</h2>
           <Cart
             cart={cart}
-            updateCartItemQuantity={updateCartItemQuantity}
+            updateCartItemWeight={updateCartItemWeight}
             removeFromCart={removeFromCart}
             exportToExcel={exportToExcel}
             exportToPDF={exportToPDF}
