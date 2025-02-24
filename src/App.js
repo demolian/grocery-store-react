@@ -215,50 +215,70 @@ function App() {
     return `${day} ${month} ${year}_${hours}t${minutes}m${seconds}s`;
   };
 
-  const exportToExcel = useCallback(() => {
-    // Prepare the rows from the cart data including Quantity column
-    const data = cart.map((item, index) => ({
-      "S.No.": index + 1,
-      Product: item.product,
-      "Price per Kg": item.price.toFixed(2),
-      "Weight (g)": item.weight,
-      Quantity: item.quantity,
-      "Total Price": ((item.price * item.weight * item.quantity) / 1000).toFixed(2),
-    }));
-
-    // Calculate total sales using the new formula with quantity
+  const exportToExcel = useCallback((customerName = '') => {
+    // Explicitly define header order
+    const header = ["S.No.", "Product", "Price per Kg", "Weight (g)", "Quantity", "Total Price"];
+    
+    // Build data rows as arrays
+    const dataArray = cart.map((item, index) => [
+      index + 1,
+      item.product,
+      item.price.toFixed(2),
+      item.weight,
+      item.quantity,
+      ((item.price * item.weight * item.quantity) / 1000).toFixed(2)
+    ]);
+    
+    // Calculate total sales (in currency)
     const totalSales = cart.reduce(
-      (total, item) =>
-        total + (item.price * item.weight * item.quantity) / 1000,
+      (total, item) => total + (item.price * item.weight * item.quantity) / 1000,
       0
     );
-
-    // Add a total row at the end (leaving S.No., Price per Kg, Weight and Quantity blank)
-    data.push({
-      "S.No.": "",
-      Product: "Total",
-      "Price per Kg": "",
-      "Weight (g)": "",
-      Quantity: "",
-      "Total Price": "\u20B9" + totalSales.toFixed(2),
-    });
-
-    const ws = XLSX.utils.json_to_sheet(data);
+    
+    // Append a total row as an array
+    dataArray.push(["", "Total", "", "", "", "\u20B9" + totalSales.toFixed(2)]);
+    
+    // Build the final array-of-arrays (newData)
+    let newData;
+    if (customerName) {
+      newData = [
+        [`Customer Name: ${customerName}`],
+        [""],
+        [""],
+        header,
+        ...dataArray
+      ];
+    } else {
+      newData = [
+        header,
+        ...dataArray
+      ];
+    }
+    
+    // Create a worksheet from newData and save
+    const ws = XLSX.utils.aoa_to_sheet(newData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Cart");
-
+    
     const fileName = `${getFormattedDateTime()}_cart.xlsx`;
     XLSX.writeFile(wb, fileName);
   }, [cart]);
 
-  const exportToPDF = useCallback(() => {
+  const exportToPDF = useCallback((customerName = '') => {
     const doc = new jsPDF();
-
-    // Set font—note: using Times may not support Marathi; embed a custom font for that
     doc.setFont("Times", "normal");
     doc.setFontSize(12);
-
-    // Prepare the data for export including the Quantity column
+  
+    // Start Y coordinate for the table.
+    let startY = 10;
+    if (customerName) {
+      // Insert the customer name at the top.
+      doc.text(`Customer Name: ${customerName}`, 10, startY);
+      // Add two vertical spaces (e.g., 20 units total).
+      startY += 20;
+    }
+  
+    // Prepare data for export.
     const exportData = cart.map((item, index) => ({
       "S.No.": index + 1,
       "Product": item.product,
@@ -267,30 +287,26 @@ function App() {
       "Quantity": item.quantity,
       "Total Price": ((item.price * item.weight * item.quantity) / 1000).toFixed(2),
     }));
-
-    // Calculate total sales using the new formula with quantity
-    const totalSales = cart.reduce(
-      (total, item) =>
-        total + (item.price * item.weight * item.quantity) / 1000,
-      0
-    );
-
-    // Use the keys from the first object as table headers
+  
     const columns = Object.keys(exportData[0]);
     const rows = exportData.map((row) => columns.map((col) => row[col]));
-
-    // Create the table using autoTable
+  
     doc.autoTable({
       head: [columns],
       body: rows,
       styles: { font: 'Times', fontSize: 12 },
       theme: 'grid',
+      startY: startY,
     });
-
-    // Write total sales below the table. finalY is from the autoTable plugin.
-    const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 10 : 20;
+  
+    const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 10 : startY;
+    const totalSales = cart.reduce(
+      (total, item) =>
+        total + (item.price * item.weight * item.quantity) / 1000,
+      0
+    );
     doc.text(`Total: \u20B9${totalSales.toFixed(2)}`, 10, finalY);
-
+  
     const fileName = `${getFormattedDateTime()}_cart.pdf`;
     doc.save(fileName);
   }, [cart]);
