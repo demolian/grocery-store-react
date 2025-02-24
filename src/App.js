@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import supabase from './supabaseClient';
 import './index.css';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faTrash, faEdit } from '@fortawesome/free-solid-svg-icons';
 import ConfirmationDialog from './ConfirmationDialog';
 import PasswordDialog from './PasswordDialog';
+import ProductList from './components/ProductList';
+import Cart from './components/Cart';
+import NewProductForm from './components/NewProductForm';
 
 function App() {
   const [products, setProducts] = useState([]);
@@ -22,10 +23,14 @@ function App() {
     loadProducts();
     const subscription = supabase
       .channel('public:products')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, payload => {
-        console.log('Change received!', payload);
-        loadProducts();
-      })
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'products' },
+        (payload) => {
+          console.log('Change received!', payload);
+          loadProducts();
+        }
+      )
       .subscribe();
 
     return () => {
@@ -34,57 +39,13 @@ function App() {
   }, [currentPage]);
 
   const loadProducts = useCallback(async () => {
-    const { data: products, error } = await supabase
-      .from('products')
-      .select('*');
+    const { data, error } = await supabase.from('products').select('*');
     if (error) {
       console.error('Error loading products:', error);
     } else {
-      setProducts(products);
+      setProducts(data);
     }
   }, []);
-
-  const renderProducts = useCallback(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    const paginatedProducts = products.slice(startIndex, endIndex);
-
-    return paginatedProducts.map(product => (
-      <div key={product.id} className="bg-white p-4 rounded shadow">
-        <img
-          src={product.image_url || 'https://via.placeholder.com/300x200'}
-          alt={`Image of ${product.product_name}`}
-          className="w-full h-48 object-cover rounded"
-        />
-        <h2 className="text-xl font-bold mt-2">{product.product_name}</h2>
-        <p className="text-gray-700">₹{product.price.toFixed(2)} / lb</p>
-        <p className="text-gray-700">Inventory: {product.inventory}</p>
-        <button
-          className="bg-green-600 text-white px-4 py-2 rounded mt-2"
-          onClick={() => addToCart(product)}
-          disabled={product.inventory <= 0}
-        >
-          Add to Cart
-        </button>
-        <button
-          className="bg-blue-600 text-white px-4 py-2 rounded mt-2 ml-2"
-          onClick={() => {
-            setShowPasswordDialog(true);
-            setPasswordCallback(() => (password) => {
-              if (password === 'admin') {
-                editProduct(product);
-              } else {
-                alert('Incorrect password');
-              }
-              setShowPasswordDialog(false);
-            });
-          }}
-        >
-          <FontAwesomeIcon icon={faEdit} /> Edit
-        </button>
-      </div>
-    ));
-  }, [products, currentPage]);
 
   const addToCart = useCallback((product) => {
     if (product.inventory <= 0) {
@@ -92,22 +53,29 @@ function App() {
       return;
     }
 
-    setCart(prevCart => {
-      const existingItem = prevCart.find(item => item.product === product.product_name);
+    setCart((prevCart) => {
+      const existingItem = prevCart.find(
+        (item) => item.product === product.product_name
+      );
       if (existingItem) {
-        return prevCart.map(item =>
+        return prevCart.map((item) =>
           item.product === product.product_name
             ? { ...item, quantity: item.quantity + 1 }
             : item
         );
       } else {
-        return [...prevCart, { product: product.product_name, price: product.price, quantity: 1 }];
+        return [
+          ...prevCart,
+          { product: product.product_name, price: product.price, quantity: 1 },
+        ];
       }
     });
 
-    setProducts(prevProducts => 
-      prevProducts.map(p => 
-        p.id === product.id ? { ...p, inventory: Math.max(p.inventory - 1, 0) } : p
+    setProducts((prevProducts) =>
+      prevProducts.map((p) =>
+        p.id === product.id
+          ? { ...p, inventory: Math.max(p.inventory - 1, 0) }
+          : p
       )
     );
 
@@ -134,81 +102,53 @@ function App() {
     }
   }, []);
 
-  const cartItems = useMemo(() => {
-    return cart.map(item => (
-      <tr key={item.product}>
-        <td className="p-2">{item.product}</td>
-        <td className="p-2">₹{item.price.toFixed(2)}</td>
-        <td className="p-2 flex items-center">
-          <button
-            className="bg-gray-300 text-black px-2 py-1 rounded"
-            onClick={() => updateCartItemQuantity(item.product, item.quantity - 1)}
-            disabled={item.quantity <= 1}
-          >
-            -
-          </button>
-          <span className="mx-2">{item.quantity}</span>
-          <button
-            className="bg-gray-300 text-black px-2 py-1 rounded"
-            onClick={() => updateCartItemQuantity(item.product, item.quantity + 1)}
-          >
-            +
-          </button>
-        </td>
-        <td className="p-2">₹{(item.price * item.quantity).toFixed(2)}</td>
-        <td className="p-2">
-          <button className="text-red-600" onClick={() => removeFromCart(item.product)}>
-            <FontAwesomeIcon icon={faTrash} />
-          </button>
-        </td>
-      </tr>
-    ));
-  }, [cart]);
+  const updateCartItemQuantity = useCallback(
+    (productName, newQuantity) => {
+      setCart((prevCart) => {
+        return prevCart.map((item) =>
+          item.product === productName
+            ? { ...item, quantity: newQuantity }
+            : item
+        );
+      });
 
-  const updateCartItemQuantity = useCallback((productName, newQuantity) => {
-    setCart(prevCart => {
-      return prevCart.map(item =>
-        item.product === productName
-          ? { ...item, quantity: newQuantity }
-          : item
+      const product = products.find(
+        (p) => p.product_name === productName
       );
-    });
+      if (product) {
+        const quantityChange =
+          newQuantity - cart.find((item) => item.product === productName)
+            .quantity;
+        updateProductInventory(product.id, -quantityChange);
+      }
+    },
+    [cart, products]
+  );
 
-    const product = products.find(p => p.product_name === productName);
-    if (product) {
-      const quantityChange = newQuantity - cart.find(item => item.product === productName).quantity;
-      updateProductInventory(product.id, -quantityChange);
-    }
-  }, [cart, products]);
-
-  const removeFromCart = useCallback((productName) => {
-    const product = cart.find(item => item.product === productName);
-    if (product) {
-      updateProductInventory(product.id, product.quantity);
-    }
-    setCart(prevCart => prevCart.filter(item => item.product !== productName));
-  }, [cart]);
-
-  const handleSearch = useCallback(async (event) => {
-    const searchText = event.target.value.toLowerCase();
-    const { data: products, error } = await supabase
-      .from('products')
-      .select('*')
-      .ilike('product_name', `%${searchText}%`);
-    if (error) {
-      console.error('Error searching products:', error);
-      return;
-    }
-    setProducts(products);
-  }, []);
+  const removeFromCart = useCallback(
+    (productName) => {
+      const productInCart = cart.find((item) => item.product === productName);
+      if (productInCart) {
+        // Assuming your product record has the id stored in some way
+        // Otherwise adjust the logic accordingly.
+        updateProductInventory(productInCart.id, productInCart.quantity);
+      }
+      setCart((prevCart) =>
+        prevCart.filter((item) => item.product !== productName)
+      );
+    },
+    [cart]
+  );
 
   const exportToExcel = useCallback(() => {
-    const ws = XLSX.utils.json_to_sheet(cart.map(item => ({
-      Product: item.product,
-      Price: item.price,
-      Quantity: item.quantity,
-      Total: item.price * item.quantity
-    })));
+    const ws = XLSX.utils.json_to_sheet(
+      cart.map((item) => ({
+        Product: item.product,
+        Price: item.price,
+        Quantity: item.quantity,
+        Total: item.price * item.quantity,
+      }))
+    );
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Cart');
     XLSX.writeFile(wb, 'cart.xlsx');
@@ -218,85 +158,153 @@ function App() {
     const doc = new jsPDF();
     doc.text('Cart', 10, 10);
     let y = 20;
-    cart.forEach(item => {
-      doc.text(`${item.product} - ₹${item.price.toFixed(2)} x ${item.quantity} = ₹${(item.price * item.quantity).toFixed(2)}`, 10, y);
+    cart.forEach((item) => {
+      doc.text(
+        `${item.product} - ₹${item.price.toFixed(2)} x ${item.quantity} = ₹${(
+          item.price * item.quantity
+        ).toFixed(2)}`,
+        10,
+        y
+      );
       y += 10;
     });
-    doc.text(`Total: ₹${cart.reduce((total, item) => total + item.price * item.quantity, 0).toFixed(2)}`, 10, y + 10);
+    doc.text(
+      `Total: ₹${cart
+        .reduce((total, item) => total + item.price * item.quantity, 0)
+        .toFixed(2)}`,
+      10,
+      y + 10
+    );
     doc.save('cart.pdf');
   }, [cart]);
 
   const checkout = useCallback(() => {
-    const totalSales = cart.reduce((total, item) => total + item.price * item.quantity, 0);
+    const totalSales = cart.reduce(
+      (total, item) => total + item.price * item.quantity,
+      0
+    );
     alert(`Total Daily Sales: ₹${totalSales.toFixed(2)}`);
   }, [cart]);
 
-  const editProduct = useCallback((product) => {
-    const newName = prompt('Enter new product name:', product.product_name);
-    const newPrice = parseFloat(prompt('Enter new product price:', product.price));
-    const newInventory = parseInt(prompt('Enter new product inventory:', product.inventory));
+  const editProduct = useCallback(
+    (product) => {
+      const newName = prompt('Enter new product name:', product.product_name);
+      const newPrice = parseFloat(
+        prompt('Enter new product price:', product.price)
+      );
+      const newInventory = parseInt(
+        prompt('Enter new product inventory:', product.inventory)
+      );
 
-    // Update the product with the new values before showing the confirmation dialog
-    const updateProductWithoutImage = async () => {
-      const { error: updateError } = await supabase
-        .from('products')
-        .update({ product_name: newName, price: newPrice, inventory: newInventory })
-        .match({ id: product.id });
-      if (updateError) {
-        console.error("Error updating product:", updateError);
-        alert('Failed to update product. Please try again.');
-        return;
-      }
-      loadProducts();
-    };
-
-    updateProductWithoutImage();
-
-    setShowConfirmDialog(true);
-    setConfirmCallback(() => async (confirm) => {
-      if (!confirm) {
-        // If the user cancels the confirmation dialog, just close the dialog
-        setShowConfirmDialog(false);
-        return;
-      }
-
-      // Directly allow the user to upload an image from the file system
-      let newImageUrl = product.image_url;
-      const imageFile = document.createElement('input');
-      imageFile.type = 'file';
-      imageFile.accept = 'image/*';
-      imageFile.onchange = async () => {
-        const file = imageFile.files[0];
-        if (file) {
-          const { data: imageData, error: uploadError } = await supabase.storage
-            .from('images')
-            .upload(`${file.name}`, file);
-          if (uploadError) {
-            console.error("Error uploading image:", uploadError);
-            alert('Failed to upload image. Please try again.');
-            return;
-          }
-          newImageUrl = `${process.env.REACT_APP_SUPABASE_URL}/storage/v1/object/public/images/${file.name}`;
-          updateProductWithImage();
-        }
-      };
-      imageFile.click();
-
-      const updateProductWithImage = async () => {
+      const updateProductWithoutImage = async () => {
         const { error: updateError } = await supabase
           .from('products')
-          .update({ product_name: newName, price: newPrice, inventory: newInventory, image_url: newImageUrl })
+          .update({ product_name: newName, price: newPrice, inventory: newInventory })
           .match({ id: product.id });
         if (updateError) {
-          console.error("Error updating product:", updateError);
+          console.error('Error updating product:', updateError);
           alert('Failed to update product. Please try again.');
           return;
         }
         loadProducts();
-        setShowConfirmDialog(false);
       };
+
+      updateProductWithoutImage();
+
+      setShowConfirmDialog(true);
+      setConfirmCallback(() => async (confirm) => {
+        if (!confirm) {
+          setShowConfirmDialog(false);
+          return;
+        }
+
+        let newImageUrl = product.image_url;
+        const imageFile = document.createElement('input');
+        imageFile.type = 'file';
+        imageFile.accept = 'image/*';
+        imageFile.onchange = async () => {
+          const file = imageFile.files[0];
+          if (file) {
+            const { error: uploadError } = await supabase.storage
+              .from('images')
+              .upload(`${file.name}`, file);
+            if (uploadError) {
+              console.error('Error uploading image:', uploadError);
+              alert('Failed to upload image. Please try again.');
+              return;
+            }
+            newImageUrl = `${process.env.REACT_APP_SUPABASE_URL}/storage/v1/object/public/images/${file.name}`;
+            updateProductWithImage();
+          }
+        };
+        imageFile.click();
+
+        const updateProductWithImage = async () => {
+          const { error: updateError } = await supabase
+            .from('products')
+            .update({
+              product_name: newName,
+              price: newPrice,
+              inventory: newInventory,
+              image_url: newImageUrl,
+            })
+            .match({ id: product.id });
+          if (updateError) {
+            console.error('Error updating product:', updateError);
+            alert('Failed to update product. Please try again.');
+            return;
+          }
+          loadProducts();
+          setShowConfirmDialog(false);
+        };
+      });
+    },
+    [loadProducts]
+  );
+
+  // Handle password before editing
+  const handleRequestPassword = (product) => {
+    setShowPasswordDialog(true);
+    setPasswordCallback(() => (password) => {
+      if (password === 'admin') {
+        editProduct(product);
+      } else {
+        alert('Incorrect password');
+      }
+      setShowPasswordDialog(false);
     });
-  }, [loadProducts]);
+  };
+
+  // New product form logic moved to a separate component.
+  const addNewProduct = useCallback(
+    async ({ name, price, inventory, imageFile }) => {
+      let imageUrl = '';
+      if (imageFile) {
+        const { error: uploadError } = await supabase.storage
+          .from('images')
+          .upload(`${imageFile.name}`, imageFile);
+        if (uploadError) {
+          console.error('Error uploading image:', uploadError);
+          alert('Failed to upload image. Please try again.');
+          return;
+        }
+        imageUrl = `${process.env.REACT_APP_SUPABASE_URL}/storage/v1/object/public/images/${imageFile.name}`;
+      }
+
+      const { error: insertError } = await supabase
+        .from('products')
+        .insert([
+          { product_name: name, price: price, inventory: inventory, image_url: imageUrl },
+        ]);
+      if (insertError) {
+        console.error('Error adding product:', insertError);
+        alert('Failed to add product. Please try again.');
+        return;
+      }
+      loadProducts();
+    },
+    [loadProducts]
+  );
 
   return (
     <div className="container mx-auto p-4">
@@ -308,13 +316,30 @@ function App() {
             id="search-bar"
             placeholder="Search..."
             className="border border-gray-400 p-2 rounded text-black mx-auto"
-            onInput={handleSearch}
+            onInput={async (e) => {
+              const searchText = e.target.value.toLowerCase();
+              const { data, error } = await supabase
+                .from('products')
+                .select('*')
+                .ilike('product_name', `%${searchText}%`);
+              if (error) {
+                console.error('Error searching products:', error);
+                return;
+              }
+              setProducts(data);
+            }}
           />
         </div>
       </header>
       <main>
         <section className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4" id="product-list">
-          {renderProducts()}
+          <ProductList
+            products={products}
+            currentPage={currentPage}
+            itemsPerPage={itemsPerPage}
+            onAddToCart={addToCart}
+            onRequestPassword={handleRequestPassword}
+          />
         </section>
         <div className="flex justify-between items-center mt-4">
           <button
@@ -334,52 +359,18 @@ function App() {
         </div>
         <section className="mt-8">
           <h2 className="text-2xl font-bold mb-4">Cart</h2>
-          <div className="bg-white p-4 rounded shadow">
-            <table className="w-full">
-              <thead>
-                <tr>
-                  <th className="text-left p-2">Product</th>
-                  <th className="text-left p-2">Price</th>
-                  <th className="text-left p-2">Quantity</th>
-                  <th className="text-left p-2">Total</th>
-                  <th className="text-left p-2">Actions</th>
-                </tr>
-              </thead>
-              <tbody id="cart-items">
-                {cartItems}
-              </tbody>
-            </table>
-            <div className="flex justify-between items-center mt-4">
-              <p className="text-xl font-bold" id="cart-total">Total: ₹{cart.reduce((total, item) => total + item.price * item.quantity, 0).toFixed(2)}</p>
-              <div>
-                <button className="bg-blue-600 text-white px-4 py-2 rounded mr-2" onClick={exportToExcel}>Export to Excel</button>
-                <button className="bg-red-600 text-white px-4 py-2 rounded" onClick={exportToPDF}>Export to PDF</button>
-                <button className="bg-green-600 text-white px-4 py-2 rounded ml-2" onClick={checkout}>Checkout</button>
-              </div>
-            </div>
-          </div>
+          <Cart
+            cart={cart}
+            updateCartItemQuantity={updateCartItemQuantity}
+            removeFromCart={removeFromCart}
+            exportToExcel={exportToExcel}
+            exportToPDF={exportToPDF}
+            checkout={checkout}
+          />
         </section>
         <section className="mt-8">
           <h2 className="text-2xl font-bold mb-4">Add New Product</h2>
-          <div className="bg-white p-4 rounded shadow">
-            <div className="mb-4">
-              <label className="block text-gray-700">Product Name</label>
-              <input type="text" id="new-product-name" className="border border-gray-400 p-2 rounded w-full" />
-            </div>
-            <div className="mb-4">
-              <label className="block text-gray-700">Price</label>
-              <input type="number" id="new-product-price" className="border border-gray-400 p-2 rounded w-full" min="0" />
-            </div>
-            <div className="mb-4">
-              <label className="block text-gray-700">Image</label>
-              <input type="file" id="new-product-image" className="border border-gray-400 p-2 rounded w-full" accept="image/*" />
-            </div>
-            <div className="mb-4">
-              <label className="block text-gray-700">Inventory</label>
-              <input type="number" id="new-product-inventory" className="border border-gray-400 p-2 rounded w-full" min="1" />
-            </div>
-            <button className="bg-green-600 text-white px-4 py-2 rounded" id="add-new-product" onClick={addNewProduct}>Add Product</button>
-          </div>
+          <NewProductForm onAddNewProduct={addNewProduct} />
         </section>
       </main>
       {showConfirmDialog && (
@@ -397,54 +388,6 @@ function App() {
       )}
     </div>
   );
-
-  async function addNewProduct() {
-    const name = document.getElementById('new-product-name').value;
-    const price = parseFloat(document.getElementById('new-product-price').value);
-    const inventory = parseInt(document.getElementById('new-product-inventory').value);
-    const imageFile = document.getElementById('new-product-image').files[0];
-
-    if (!name || isNaN(price) || isNaN(inventory)) {
-      alert('Please fill in all fields correctly.');
-      return;
-    }
-
-    let imageUrl = '';
-    if (imageFile) {
-      // Upload image to Supabase Storage
-      const { data: imageData, error: uploadError } = await supabase.storage
-        .from('images') // Ensure this matches the name of your bucket
-        .upload(`${imageFile.name}`, imageFile); // public/
-
-      if (uploadError) {
-        console.error("Error uploading image:", uploadError);
-        alert('Failed to upload image. Please try again.');
-        return;
-      }
-
-      // Generate the public URL for the uploaded image
-      imageUrl = `${process.env.REACT_APP_SUPABASE_URL}/storage/v1/object/public/images/${imageFile.name}`;
-    }
-
-    // Insert new product into Supabase
-    const { error: insertError } = await supabase
-      .from('products')
-      .insert([{ product_name: name, price: price, inventory: inventory, image_url: imageUrl }]);
-
-    if (insertError) {
-      console.error("Error adding product:", insertError);
-      alert('Failed to add product. Please try again.');
-      return;
-    }
-
-    // Clear input fields
-    document.getElementById('new-product-name').value = '';
-    document.getElementById('new-product-price').value = '';
-    document.getElementById('new-product-inventory').value = '';
-    document.getElementById('new-product-image').value = '';
-
-    loadProducts(); // Reload products to show the new addition
-  }
 }
 
 export default App;
