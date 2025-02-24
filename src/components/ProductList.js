@@ -10,35 +10,42 @@ const ProductList = ({
   onEditProduct,
   onRequestPassword
 }) => {
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedProducts = products.slice(startIndex, endIndex);
+  // Calculate the indexes of the first and last item to display on the current page
+  const lastItemIndex = currentPage * itemsPerPage;
+  const firstItemIndex = lastItemIndex - itemsPerPage;
+
+  // Slice the products array to get only the items for the current page
+  const currentItems = products.slice(firstItemIndex, lastItemIndex);
 
   return (
     <>
-      {paginatedProducts.map(product => (
-        <div key={product.id} className="bg-white p-4 rounded shadow">
+      {currentItems.map((product) => (
+        <div key={product.id} className="border p-4 rounded shadow-md">
           <img
             src={product.image_url || 'https://via.placeholder.com/300x200'}
             alt={`Image of ${product.product_name}`}
-            className="w-full h-48 object-cover rounded"
+            className="w-full h-48 object-cover mb-4 rounded"
           />
-          <h2 className="text-xl font-bold mt-2">{product.product_name}</h2>
-          <p className="text-gray-700">₹{product.price.toFixed(2)} / kg</p>
-          <p className="text-gray-700">Inventory: {product.inventory}</p>
-          <button
-            className="bg-green-600 text-white px-4 py-2 rounded mt-2"
-            onClick={() => onAddToCart(product)}
-            disabled={product.inventory <= 0}
-          >
-            Add to Cart
-          </button>
-          <button
-            className="bg-blue-600 text-white px-4 py-2 rounded mt-2 ml-2"
-            onClick={() => onRequestPassword(product)}
-          >
-            <FontAwesomeIcon icon={faEdit} /> Edit
-          </button>
+          <h3 className="text-xl font-semibold mb-2">{product.product_name}</h3>
+          <p className="text-gray-700 mb-2">
+            Price: ₹{product.price != null ? product.price.toFixed(2) : '0.00'}
+          </p>
+          <p className="text-gray-700 mb-2">Inventory: {product.inventory} kg</p>
+          <div className="flex justify-between items-center">
+            <button
+              className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+              onClick={() => onAddToCart(product)}
+              disabled={product.inventory <= 0}
+            >
+              Add to Cart
+            </button>
+            <button
+              className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+              onClick={() => onRequestPassword(product)}
+            >
+              <FontAwesomeIcon icon={faEdit} /> Edit
+            </button>
+          </div>
         </div>
       ))}
     </>

@@ -6,6 +6,7 @@ const BillsHistory = () => {
   const [accessGranted, setAccessGranted] = useState(false);
   const [password, setPassword] = useState('');
   const [showPasswordInput, setShowPasswordInput] = useState(true);
+  const [products, setProducts] = useState([]);
 
   useEffect(() => {
     // No need to ask for password on initial render
@@ -23,15 +24,32 @@ const BillsHistory = () => {
     }
   };
 
+  const fetchProducts = async () => {
+    const { data, error } = await supabase
+      .from('products')
+      .select('id, product_name');
+    if (error) {
+      console.error("Error fetching products:", error);
+    } else {
+      setProducts(data);
+    }
+  };
+
   const handlePasswordSubmit = (e) => {
     e.preventDefault();
     if (password === 'admin') {
       setAccessGranted(true);
       setShowPasswordInput(false);
       fetchBills();
+      fetchProducts();
     } else {
       alert("Access Denied");
     }
+  };
+
+  const getProductName = (productId) => {
+    const product = products.find((p) => p.id === productId);
+    return product ? product.product_name : 'Unknown Product';
   };
 
   if (showPasswordInput) {
@@ -72,7 +90,7 @@ const BillsHistory = () => {
             <tr>
               <th className="border p-2">Sr. No.</th>
               <th className="border p-2">Customer Name</th>
-              <th className="border p-2">Product ID</th>
+              <th className="border p-2">Product Name</th>
               <th className="border p-2">Quantity</th>
               <th className="border p-2">Price per Kg</th>
               <th className="border p-2">Weight (g)</th>
@@ -85,7 +103,7 @@ const BillsHistory = () => {
               <tr key={bill.id}>
                 <td className="border p-2">{index + 1}</td>
                 <td className="border p-2">{bill.customer_name}</td>
-                <td className="border p-2">{bill.product_id}</td>
+                <td className="border p-2">{getProductName(bill.product_id)}</td>
                 <td className="border p-2">{bill.quantity}</td>
                 <td className="border p-2">{bill.price_per_kg}</td>
                 <td className="border p-2">{bill.weight}</td>

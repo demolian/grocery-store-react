@@ -225,15 +225,15 @@ function App() {
     const dataArray = cart.map((item, index) => [
       index + 1,
       item.product,
-      item.price.toFixed(2),
+      item.price != null ? item.price.toFixed(2) : '0.00', // Check for null here
       item.weight,
       item.quantity,
-      ((item.price * item.weight * item.quantity) / 1000).toFixed(2)
+      ((item.price != null ? item.price : 0) * item.weight * item.quantity / 1000).toFixed(2) // Check for null here
     ]);
     
     // Calculate total sales (in currency)
     const totalSales = cart.reduce(
-      (total, item) => total + (item.price * item.weight * item.quantity) / 1000,
+      (total, item) => total + ((item.price != null ? item.price : 0) * item.weight * item.quantity) / 1000, // Check for null here
       0
     );
     
@@ -284,10 +284,10 @@ function App() {
     const exportData = cart.map((item, index) => ({
       "S.No.": index + 1,
       "Product": item.product,
-      "Price per Kg": item.price.toFixed(2),
+      "Price per Kg": item.price != null ? item.price.toFixed(2) : '0.00', // Check for null here
       "Weight (g)": item.weight,
       "Quantity": item.quantity,
-      "Total Price": ((item.price * item.weight * item.quantity) / 1000).toFixed(2),
+      "Total Price": ((item.price != null ? item.price : 0) * item.weight * item.quantity / 1000).toFixed(2), // Check for null here
     }));
   
     const columns = Object.keys(exportData[0]);
@@ -304,7 +304,7 @@ function App() {
     const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 10 : startY;
     const totalSales = cart.reduce(
       (total, item) =>
-        total + (item.price * item.weight * item.quantity) / 1000,
+        total + ((item.price != null ? item.price : 0) * item.weight * item.quantity) / 1000, // Check for null here
       0
     );
     doc.text(`Total: \u20B9${totalSales.toFixed(2)}`, 10, finalY);
