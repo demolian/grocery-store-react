@@ -11,7 +11,8 @@ const Cart = ({
   removeFromCart,
   exportToExcel,
   exportToPDF,
-  checkout
+  checkout,
+  recordCheckout
 }) => {
   // Initialize customerName from localStorage so it persists across reloads.
   const [customerName, setCustomerName] = useState(() => localStorage.getItem('customerName') || '');
@@ -40,7 +41,7 @@ const Cart = ({
   }, [customerName, isCustomerNameSet]);
 
   // New checkout handler
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (cart.length === 0) {
       alert("Cart is empty.");
       return;
@@ -49,7 +50,6 @@ const Cart = ({
     // Confirm export options
     const exportExcel = window.confirm("Do you want to export the bill to Excel?");
     const exportPDF = window.confirm("Do you want to export the bill to PDF?");
-
     if (exportExcel) {
       exportToExcel(customerName);
     }
@@ -57,12 +57,16 @@ const Cart = ({
       exportToPDF(customerName);
     }
 
-    // Confirm checkout & empty cart
+    // Confirm checkout (which will record the checkout and clear the cart)
     const confirmClear = window.confirm("Proceed with checkout? This will empty your cart.");
     if (confirmClear) {
-      // Call checkout callback (which empties the cart but does NOT restore inventory)
+      // Record checkout details to Supabase.
+      await recordCheckout(customerName, cart);
+      
+      // Call the checkout callback from App.js to empty the local cart.
       checkout();
-      // Clear customer name from state and localStorage
+      
+      // Clear customer name from state and localStorage.
       setCustomerName('');
       setIsCustomerNameSet(false);
       localStorage.removeItem('customerName');

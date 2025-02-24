@@ -87,6 +87,7 @@ function App() {
     }
 
     // Default weight chosen is 1000 grams.
+
     const defaultWeight = 1000;
 
     // Set default quantity to 1.
@@ -311,6 +312,37 @@ function App() {
     doc.save(fileName);
   }, [cart]);
 
+  const recordCheckout = useCallback(async (customerName, cartItems) => {
+    // Build an array of checkout records.
+    // Look-up product id from the products state based on product name.
+    const checkoutRecords = cartItems.map((item, index) => {
+      // Find the corresponding product to get its id.
+      const productObj = products.find(
+        (p) => p.product_name.toLowerCase() === item.product.toLowerCase()
+      );
+      return {
+        // product_id is required; if not found, you might want to skip that item.
+        product_id: productObj ? productObj.id : null,
+        quantity: item.quantity,
+        price_per_kg: item.price,
+        weight: item.weight,
+        total_price: (item.price * item.weight * item.quantity) / 1000,
+        customer_name: customerName,
+        // created_at will be set by the database if using a default value.
+      }
+    }).filter(record => record.product_id !== null); // remove any records without valid product id
+    
+    // Bulk insert the checkout records into the Supabase "cart" table.
+    const { error } = await supabase
+      .from('cart')
+      .insert(checkoutRecords);
+    
+    if (error) {
+      console.error("Error recording checkout: ", error);
+      alert("There was an error recording the checkout order.");
+    }
+  }, [products]);
+
   const checkout = useCallback(() => {
     setCart([]); // This empties the cart.
     alert('Checkout complete.');
@@ -496,6 +528,7 @@ function App() {
             exportToExcel={exportToExcel}
             exportToPDF={exportToPDF}
             checkout={checkout}
+            recordCheckout={recordCheckout}   // Pass recordCheckout here
           />
         </section>
         <section className="mt-8">
