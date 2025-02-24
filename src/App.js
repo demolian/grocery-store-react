@@ -142,29 +142,55 @@ function App() {
   );
 
   const updateCartItemQuantity = useCallback((productName, newQuantity) => {
-    setCart((prevCart) =>
-      prevCart.map((item) =>
-        item.product.toLowerCase() === productName.toLowerCase()
-          ? { ...item, quantity: newQuantity }
-          : item
-      )
+    setCart(prevCart =>
+      prevCart.map(item => {
+        if (item.product.toLowerCase() === productName.toLowerCase()) {
+          const oldQuantity = item.quantity;
+          const diff = newQuantity - oldQuantity;
+          // Find the product details to check inventory
+          const product = products.find(
+            p => p.product_name.toLowerCase() === productName.toLowerCase()
+          );
+          if (product) {
+            if (diff > 0) {
+              // Calculate additional weight in kg required
+              const additionalWeightKg = diff * (item.weight / 1000);
+              if (product.inventory < additionalWeightKg) {
+                alert('Not enough inventory available for additional quantity');
+                return item;
+              }
+              // Deduct additional weight from inventory
+              updateProductInventory(product.id, -additionalWeightKg);
+            } else if (diff < 0) {
+              // Release weight back to inventory when quantity decreases
+              const releasedWeightKg = (-diff) * (item.weight / 1000);
+              updateProductInventory(product.id, releasedWeightKg);
+            }
+          }
+          return { ...item, quantity: newQuantity };
+        }
+        return item;
+      })
     );
-  }, []);
+  }, [products, updateProductInventory]);
 
-  const removeFromCart = useCallback(
-    (productName) => {
-      const productInCart = cart.find((item) => item.product === productName);
-      if (productInCart) {
-        // Assuming your product record has the id stored in some way
-        // Otherwise adjust the logic accordingly.
-        updateProductInventory(productInCart.id, productInCart.quantity);
-      }
-      setCart((prevCart) =>
-        prevCart.filter((item) => item.product !== productName)
-      );
-    },
-    [cart]
-  );
+  const removeFromCart = useCallback((productName) => {
+    // Find the cart item and the corresponding product.
+    const productInCart = cart.find(
+      item => item.product.toLowerCase() === productName.toLowerCase()
+    );
+    const product = products.find(
+      p => p.product_name.toLowerCase() === productName.toLowerCase()
+    );
+    if (product && productInCart) {
+      // Add back the inventory: quantity * (weight in kg)
+      const returnAmount = productInCart.quantity * (productInCart.weight / 1000);
+      updateProductInventory(product.id, returnAmount);
+    }
+    setCart(prevCart =>
+      prevCart.filter(item => item.product.toLowerCase() !== productName.toLowerCase())
+    );
+  }, [cart, products, updateProductInventory]);
 
   // Helper function to get formatted date and time
   const getFormattedDateTime = () => {
@@ -180,26 +206,30 @@ function App() {
   };
 
   const exportToExcel = useCallback(() => {
-    // Prepare the rows from the cart data
+    // Prepare the rows from the cart data including Quantity column
     const data = cart.map((item, index) => ({
       "S.No.": index + 1,
       Product: item.product,
       "Price per Kg": item.price.toFixed(2),
       "Weight (g)": item.weight,
-      "Total Price": ((item.price * item.weight) / 1000).toFixed(2),
+      Quantity: item.quantity,
+      "Total Price": ((item.price * item.weight * item.quantity) / 1000).toFixed(2),
     }));
 
-    // Calculate total sales
+    // Calculate total sales using the new formula with quantity
     const totalSales = cart.reduce(
-      (total, item) => total + (item.price * item.weight) / 1000,
+      (total, item) =>
+        total + (item.price * item.weight * item.quantity) / 1000,
       0
     );
-    // Add a total row at the end. (Leave S.No. and other values blank except Product and Total Price)
+
+    // Add a total row at the end (leaving S.No., Price per Kg, Weight and Quantity blank)
     data.push({
       "S.No.": "",
       Product: "Total",
       "Price per Kg": "",
       "Weight (g)": "",
+      Quantity: "",
       "Total Price": "\u20B9" + totalSales.toFixed(2),
     });
 
@@ -214,29 +244,24 @@ function App() {
   const exportToPDF = useCallback(() => {
     const doc = new jsPDF();
 
-    // NOTE: For Marathi or other non-Latin languages you need to embed a custom font
-    // that supports those characters. For example, use Noto Sans Devanagari.
-    // Example (after adding the font via addFileToVFS and addFont):
-    // doc.addFileToVFS("NotoSansDevanagari-Regular.ttf", fontData);
-    // doc.addFont("NotoSansDevanagari-Regular.ttf", "NotoSansDevanagari", "normal");
-    // Then set:
-    // doc.setFont("NotoSansDevanagari");
-
-    // Here we'll use 'Times' as before but note it might not support Marathi.
+    // Set font—note: using Times may not support Marathi; embed a custom font for that
     doc.setFont("Times", "normal");
     doc.setFontSize(12);
 
+    // Prepare the data for export including the Quantity column
     const exportData = cart.map((item, index) => ({
       "S.No.": index + 1,
       "Product": item.product,
       "Price per Kg": item.price.toFixed(2),
       "Weight (g)": item.weight,
-      "Total Price": ((item.price * item.weight) / 1000).toFixed(2),
+      "Quantity": item.quantity,
+      "Total Price": ((item.price * item.weight * item.quantity) / 1000).toFixed(2),
     }));
 
-    // Calculate total sales
+    // Calculate total sales using the new formula with quantity
     const totalSales = cart.reduce(
-      (total, item) => total + (item.price * item.weight) / 1000,
+      (total, item) =>
+        total + (item.price * item.weight * item.quantity) / 1000,
       0
     );
 
@@ -244,7 +269,7 @@ function App() {
     const columns = Object.keys(exportData[0]);
     const rows = exportData.map((row) => columns.map((col) => row[col]));
 
-    // Create table using autoTable
+    // Create the table using autoTable
     doc.autoTable({
       head: [columns],
       body: rows,
@@ -252,7 +277,7 @@ function App() {
       theme: 'grid',
     });
 
-    // Write total sales below the table. The final Y coordinate is available in doc.lastAutoTable.finalY.
+    // Write total sales below the table. finalY is from the autoTable plugin.
     const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 10 : 20;
     doc.text(`Total: \u20B9${totalSales.toFixed(2)}`, 10, finalY);
 
