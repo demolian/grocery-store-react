@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import supabase from './supabaseClient';
 import './index.css';
 import * as XLSX from 'xlsx';
@@ -8,11 +8,14 @@ import PasswordDialog from './PasswordDialog';
 import ProductList from './components/ProductList';
 import Cart from './components/Cart';
 import NewProductForm from './components/NewProductForm';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faSearch } from '@fortawesome/free-solid-svg-icons';
 
 function App() {
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState('');
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [confirmCallback, setConfirmCallback] = useState(null);
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
@@ -36,40 +39,45 @@ function App() {
     return () => {
       supabase.removeChannel(subscription);
     };
-  }, [currentPage]);
+  }, [currentPage, searchTerm]);
 
   const loadProducts = useCallback(async () => {
-    const { data, error } = await supabase.from('products').select('*');
+    let query = supabase
+      .from('products')
+      .select('*')
+      .order('id', { ascending: true }); // Ensure consistent ordering
+
+    if (searchTerm) {
+      query = query.ilike('product_name', `%${searchTerm}%`);
+    }
+
+    const { data, error } = await query;
     if (error) {
       console.error('Error loading products:', error);
     } else {
       setProducts(data);
     }
-  }, []);
+  }, [searchTerm]);
 
   const addToCart = useCallback((product) => {
+    // Prevent adding duplicate items.
+    const exists = cart.find(
+      (item) => item.product.toLowerCase() === product.product_name.toLowerCase()
+    );
+    if (exists) {
+      alert('Item already in cart. You can update its quantity from the cart.');
+      return;
+    }
+
     if (product.inventory <= 0) {
       alert('Product is out of stock');
       return;
     }
 
-    setCart((prevCart) => {
-      const existingItem = prevCart.find(
-        (item) => item.product === product.product_name
-      );
-      if (existingItem) {
-        return prevCart.map((item) =>
-          item.product === product.product_name
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        );
-      } else {
-        return [
-          ...prevCart,
-          { product: product.product_name, price: product.price, quantity: 1 },
-        ];
-      }
-    });
+    setCart((prevCart) => [
+      ...prevCart,
+      { product: product.product_name, price: product.price, quantity: 1 }
+    ]);
 
     setProducts((prevProducts) =>
       prevProducts.map((p) =>
@@ -80,7 +88,7 @@ function App() {
     );
 
     updateProductInventory(product.id, -1);
-  }, []);
+  }, [cart]);
 
   const updateProductInventory = useCallback(async (productId, change) => {
     const { data: product, error: fetchError } = await supabase
@@ -311,24 +319,23 @@ function App() {
       <header className="bg-green-600 text-white p-4">
         <div className="container mx-auto flex justify-between items-center">
           <h1 className="text-2xl font-bold">Grocery Store</h1>
-          <input
-            type="text"
-            id="search-bar"
-            placeholder="Search..."
-            className="border border-gray-400 p-2 rounded text-black mx-auto"
-            onInput={async (e) => {
-              const searchText = e.target.value.toLowerCase();
-              const { data, error } = await supabase
-                .from('products')
-                .select('*')
-                .ilike('product_name', `%${searchText}%`);
-              if (error) {
-                console.error('Error searching products:', error);
-                return;
-              }
-              setProducts(data);
-            }}
-          />
+          <div className="relative">
+            <FontAwesomeIcon
+              icon={faSearch}
+              className="absolute top-3 left-2 text-gray-500"
+            />
+            <input
+              type="text"
+              id="search-bar"
+              placeholder="Search..."
+              className="border border-gray-400 p-2 rounded pl-8 text-black"
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+            />
+          </div>
         </div>
       </header>
       <main>
@@ -370,7 +377,10 @@ function App() {
         </section>
         <section className="mt-8">
           <h2 className="text-2xl font-bold mb-4">Add New Product</h2>
-          <NewProductForm onAddNewProduct={addNewProduct} />
+          <NewProductForm 
+            onAddNewProduct={addNewProduct} 
+            existingProducts={products.map(p => p.product_name)} 
+          />
         </section>
       </main>
       {showConfirmDialog && (

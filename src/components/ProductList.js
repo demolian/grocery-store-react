@@ -24,7 +24,7 @@ const ProductList = ({
             className="w-full h-48 object-cover rounded"
           />
           <h2 className="text-xl font-bold mt-2">{product.product_name}</h2>
-          <p className="text-gray-700">₹{product.price.toFixed(2)} / lb</p>
+          <p className="text-gray-700">₹{product.price.toFixed(2)} / kg</p>
           <p className="text-gray-700">Inventory: {product.inventory}</p>
           <button
             className="bg-green-600 text-white px-4 py-2 rounded mt-2"
