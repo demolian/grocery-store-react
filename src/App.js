@@ -9,6 +9,7 @@ import PasswordDialog from './PasswordDialog';
 import ProductList from './components/ProductList';
 import Cart from './components/Cart';
 import NewProductForm from './components/NewProductForm';
+import BillsHistory from './components/BillsHistory'; // Import BillsHistory
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSearch } from '@fortawesome/free-solid-svg-icons';
 
@@ -468,76 +469,95 @@ function App() {
     [loadProducts]
   );
 
+  // New state to toggle Bills History display
+  const [showBillsHistory, setShowBillsHistory] = useState(false);
+
   return (
     <div className="container mx-auto p-4">
       <header className="bg-green-600 text-white p-4">
         <div className="container mx-auto flex justify-between items-center">
           <h1 className="text-2xl font-bold">Grocery Store</h1>
-          <div className="relative">
-            <FontAwesomeIcon
-              icon={faSearch}
-              className="absolute top-3 left-2 text-gray-500"
-            />
-            <input
-              type="text"
-              id="search-bar"
-              placeholder="Search..."
-              className="border border-gray-400 p-2 rounded pl-8 text-black"
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-            />
+          <div className="flex items-center"> {/* Flex container for button and search */}
+            <button
+              className="bg-blue-600 text-white px-3 py-1 rounded mr-2"  // Add margin-right for spacing
+              onClick={() => setShowBillsHistory(prev => !prev)}
+            >
+              Bills History
+            </button>
+            <div className="relative">
+              <FontAwesomeIcon
+                icon={faSearch}
+                className="absolute top-3 left-2 text-gray-500"
+              />
+              <input
+                type="text"
+                id="search-bar"
+                placeholder="Search..."
+                className="border border-gray-400 p-2 rounded pl-8 text-black"
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
+              />
+            </div>
           </div>
         </div>
       </header>
       <main>
-        <section className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4" id="product-list">
-          <ProductList
-            products={products}
-            currentPage={currentPage}
-            itemsPerPage={itemsPerPage}
-            onAddToCart={addToCart}
-            onRequestPassword={handleRequestPassword}
-          />
-        </section>
-        <div className="flex justify-between items-center mt-4">
-          <button
-            className="bg-gray-600 text-white px-4 py-2 rounded"
-            onClick={() => setCurrentPage(currentPage - 1)}
-            disabled={currentPage === 1}
-          >
-            Previous
-          </button>
-          <button
-            className="bg-gray-600 text-white px-4 py-2 rounded"
-            onClick={() => setCurrentPage(currentPage + 1)}
-            disabled={currentPage * itemsPerPage >= products.length}
-          >
-            Next
-          </button>
-        </div>
-        <section className="mt-8">
-          <h2 className="text-2xl font-bold mb-4">Cart</h2>
-          <Cart
-            cart={cart}
-            updateCartItemWeight={updateCartItemWeight}
-            updateCartItemQuantity={updateCartItemQuantity} // Add this line
-            removeFromCart={removeFromCart}
-            exportToExcel={exportToExcel}
-            exportToPDF={exportToPDF}
-            checkout={checkout}
-            recordCheckout={recordCheckout}   // Pass recordCheckout here
-          />
-        </section>
-        <section className="mt-8">
-          <h2 className="text-2xl font-bold mb-4">Add New Product</h2>
-          <NewProductForm 
-            onAddNewProduct={addNewProduct} 
-            existingProducts={products.map(p => p.product_name)} 
-          />
-        </section>
+        {!showBillsHistory ? (
+          <>
+            <section className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4" id="product-list">
+              <ProductList
+                products={products}
+                currentPage={currentPage}
+                itemsPerPage={itemsPerPage}
+                onAddToCart={addToCart}
+                onRequestPassword={handleRequestPassword}
+              />
+            </section>
+            <div className="flex justify-between items-center mt-4">
+              <button
+                className="bg-gray-600 text-white px-4 py-2 rounded"
+                onClick={() => setCurrentPage(currentPage - 1)}
+                disabled={currentPage === 1}
+              >
+                Previous
+              </button>
+              <button
+                className="bg-gray-600 text-white px-4 py-2 rounded"
+                onClick={() => setCurrentPage(currentPage + 1)}
+                disabled={currentPage * itemsPerPage >= products.length}
+              >
+                Next
+              </button>
+            </div>
+            <section className="mt-8">
+              <h2 className="text-2xl font-bold mb-4">Cart</h2>
+              <Cart
+                cart={cart}
+                updateCartItemWeight={updateCartItemWeight}
+                updateCartItemQuantity={updateCartItemQuantity} // Add this line
+                removeFromCart={removeFromCart}
+                exportToExcel={exportToExcel}
+                exportToPDF={exportToPDF}
+                checkout={checkout}
+                recordCheckout={recordCheckout}   // Pass recordCheckout here
+              />
+            </section>
+            <section className="mt-8">
+              <h2 className="text-2xl font-bold mb-4">Add New Product</h2>
+              <NewProductForm 
+                onAddNewProduct={addNewProduct} 
+                existingProducts={products.map(p => p.product_name)} 
+              />
+            </section>
+          </>
+        ) : (
+          <section className="mt-8">
+            <BillsHistory />
+          </section>
+        )}
       </main>
       {showConfirmDialog && (
         <ConfirmationDialog
