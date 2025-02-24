@@ -39,6 +39,36 @@ const Cart = ({
     }
   }, [customerName, isCustomerNameSet]);
 
+  // New checkout handler
+  const handleCheckout = () => {
+    if (cart.length === 0) {
+      alert("Cart is empty.");
+      return;
+    }
+
+    // Confirm export options
+    const exportExcel = window.confirm("Do you want to export the bill to Excel?");
+    const exportPDF = window.confirm("Do you want to export the bill to PDF?");
+
+    if (exportExcel) {
+      exportToExcel(customerName);
+    }
+    if (exportPDF) {
+      exportToPDF(customerName);
+    }
+
+    // Confirm checkout & empty cart
+    const confirmClear = window.confirm("Proceed with checkout? This will empty your cart.");
+    if (confirmClear) {
+      // Call checkout callback (which empties the cart but does NOT restore inventory)
+      checkout();
+      // Clear customer name from state and localStorage
+      setCustomerName('');
+      setIsCustomerNameSet(false);
+      localStorage.removeItem('customerName');
+    }
+  };
+
   return (
     <div className="bg-white p-4 rounded shadow">
       {cart.length === 0 ? (
@@ -153,7 +183,7 @@ const Cart = ({
           </div>
           <div className="mt-4">
             <button
-              onClick={checkout}
+              onClick={handleCheckout}
               className="bg-yellow-600 text-white px-4 py-2 rounded"
             >
               Checkout

@@ -312,12 +312,9 @@ function App() {
   }, [cart]);
 
   const checkout = useCallback(() => {
-    const totalSales = cart.reduce(
-      (total, item) => total + item.price * item.quantity,
-      0
-    );
-    alert(`Total Daily Sales: ₹${totalSales.toFixed(2)}`);
-  }, [cart]);
+    setCart([]); // This empties the cart.
+    alert('Checkout complete.');
+  }, []);
 
   const editProduct = useCallback(
     (product) => {
